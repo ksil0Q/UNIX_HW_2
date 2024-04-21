@@ -18,9 +18,9 @@ void sigint_handler(int signal)
     {
         int current_pid = getpid();
         printf("PID_%d: Process stopped\n", current_pid);
-        FILE *result = fopen("statistics.log", "a");
-        fprintf(result, "PID_%d: Access count: %d Deny count:%d\n", current_pid, access_count, deny_count);
-        fclose(result);
+        FILE* stat_file = fopen("statistics.log", "a");
+        fprintf(stat_file, "PID_%d: Access count: %d Deny count:%d\n", current_pid, access_count, deny_count);
+        fclose(stat_file);
         exit(0);
     }
     return;
@@ -32,7 +32,8 @@ FILE* get_file_ptr(char* filename, char* mode)
     if (access(filename, F_OK) != 0)
     {
         file = fopen(filename, "w");
-        fclose(file);
+        if (file != NULL)
+            fclose(file);
     }
 
     file = fopen(filename, mode);
@@ -46,6 +47,9 @@ int try_to_lock_acquire(char* filename, int current_pid)
     {
         int pid_blocker = 0;
         file = fopen(filename, "r+");
+        if (file == NULL)
+            continue;
+
         fscanf(file, "%d", &pid_blocker);
 
         if (pid_blocker == 0)
@@ -58,7 +62,7 @@ int try_to_lock_acquire(char* filename, int current_pid)
         sleep(1);
         deny_count++;
     }
-    file = fopen(filename, "w");
+    file = fopen(filename, "wx");
     if (file == NULL)
         return -1;
     fprintf(file, "%d", current_pid);
@@ -73,6 +77,12 @@ int lock_release(char* filename, int current_pid)
     if (access(filename, F_OK) == 0)
     {
         FILE* file = fopen(filename, "r+"); // "r+" if other program acquired lock file
+        if (file == NULL)
+        {
+            FILE* stat_file = fopen("statistics.log", "a");
+            fprintf(stat_file, "PID_%d: Access count: %d Deny count:%d\n", current_pid, access_count, deny_count);
+            return -1;  
+        }
         int file_pid;
         fscanf(file, "%d", &file_pid);
         fclose(file);
@@ -80,7 +90,8 @@ int lock_release(char* filename, int current_pid)
         {
             printf("PID_%d Lock acquired by both %d and %d\n", current_pid, current_pid, file_pid);
             printf("PID_%d Skipping lock releasing\n", current_pid);
-            fprintf(file, "PID_%d: Access count: %d Deny count:%d\n", current_pid, access_count, deny_count);
+            FILE* stat_file = fopen("statistics.log", "a");
+            fprintf(stat_file, "PID_%d: Access count: %d Deny count:%d\n", current_pid, access_count, deny_count);
             return -1;
         }
         else
