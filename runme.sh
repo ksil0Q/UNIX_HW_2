@@ -17,7 +17,7 @@ do
     pids+=("$pid")
 done
 
-sleep 60
+sleep 300
 
 for pid in "${pids[@]}"
 do
